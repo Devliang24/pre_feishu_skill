@@ -5,7 +5,6 @@
 ## 功能
 
 - 📄 **文档管理**：创建文档、更新文档、获取文档
-- 📁 **文件夹管理**：在个人文档库创建文件夹
 - 📊 **表格管理**：读取 Excel/CSV 文件，创建飞书表格
 
 ## 安装
@@ -34,7 +33,7 @@ npm install -g @larksuite/cli
 ### 认证
 
 ```bash
-lark-cli auth login
+lark-cli auth login --scope "docs:doc,base:base,sheets:spreadsheet"
 lark-cli doctor  # 检查认证状态
 ```
 
@@ -43,22 +42,22 @@ lark-cli doctor  # 检查认证状态
 在 Claude Code 中直接说：
 
 - "上传到飞书" - 上传文章
-- "创建飞书文件夹" - 创建文件夹
 - "上传表格到飞书" - 上传 Excel/CSV 文件
 - "把 Excel 传到飞书" - 上传 Excel 文件
+- "创建飞书表格" - 创建表格
 
 ## 命令速查
 
 | 操作 | 命令 |
 |------|------|
 | 创建文档 | `lark-cli docs +create --title "标题" --markdown "内容" --wiki-space my_library` |
-| 创建文件夹 | `lark-cli api POST /open-apis/drive/v1/files/create_folder --data '{"name": "文件夹名"}'` |
 | 创建 Sheets | `lark-cli sheets +create --title "标题"` |
 | 更新文档 | `lark-cli docs +update --doc <URL> --markdown "内容" --mode overwrite` |
+| 写入数据 | `lark-cli sheets +write --spreadsheet-token <token> --sheet-id <id> --values '[[...]]'` |
 
 ## 版本
 
-- **v1.2.0** - 支持 Excel/CSV 上传，允许自动触发
+- **v1.4.0** - 移除文件夹创建功能，精简文档
 
 ## License
 
