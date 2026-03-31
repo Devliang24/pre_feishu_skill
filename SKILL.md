@@ -1,6 +1,6 @@
 ---
 name: feishu-article-upload
-version: 1.2.0
+version: 1.3.0
 description: 飞书文档管理 skill。将文章、Excel 表格上传到飞书个人文档库，创建文档、文件夹、表格。当用户提供文件路径或 URL 并说"上传到飞书"、"保存到飞书"、"转飞书文档"、"上传表格到飞书"、"把 Excel 传到飞书"、"创建飞书表格"时自动触发。
 allowed-tools: Bash(lark-cli *), Read, Glob
 ---
@@ -142,10 +142,11 @@ lark-cli sheets +write \
 1. 用户提供文件路径（如 `@Token计费测试用例.xlsx`）
 2. 使用 Python 读取 Excel/CSV 文件
 3. 提取表头和数据行
-4. 创建 Sheets 电子表格
+4. 创建 Sheets 电子表格（默认创建在根目录）
 5. 获取 sheet-id
 6. 写入数据
 7. 返回表格链接
+8. **注意**：如需放到指定文件夹，提示用户手动拖动
 
 **Python 读取 Excel 示例**:
 ```python
@@ -202,6 +203,30 @@ print(json.dumps(data, ensure_ascii=False))
 - `--base-token <token>`: Base token（必需）
 - `--table-id <id>`: 表格 ID 或名称（必需）
 - `--json <json>`: 记录 JSON，包含 fields 字段
+
+## 注意事项
+
+### Sheets 创建位置限制
+
+**重要**：`lark-cli sheets +create` 没有 `--folder-token` 参数，**只能在根目录创建**，无法直接创建到指定文件夹。
+
+解决方案：
+1. 先创建 Sheets
+2. 返回链接给用户，用户手动拖动到目标文件夹
+3. 或者使用 Base 多维表格（需要先有 base token）
+
+### 认证要求
+
+部分操作需要特定 scope：
+- `drive:drive` - 文件夹操作
+- `docs:doc` - 文档操作
+- `base:base` - Base 表格操作
+- `sheets:spreadsheet` - Sheets 操作
+
+如果提示权限不足，重新授权：
+```bash
+lark-cli auth login --scope "drive:drive,docs:doc,base:base,sheets:spreadsheet"
+```
 
 ## 参考文档
 
