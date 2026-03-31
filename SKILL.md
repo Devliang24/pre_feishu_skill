@@ -1,7 +1,7 @@
 ---
 name: feishu-article-upload
-version: 1.3.0
-description: 飞书文档管理 skill。将文章、Excel 表格上传到飞书个人文档库，创建文档、文件夹、表格。当用户提供文件路径或 URL 并说"上传到飞书"、"保存到飞书"、"转飞书文档"、"上传表格到飞书"、"把 Excel 传到飞书"、"创建飞书表格"时自动触发。
+version: 1.4.0
+description: 飞书文档管理 skill。将文章、Excel 表格上传到飞书个人文档库，创建文档和表格。当用户提供文件路径或 URL 并说"上传到飞书"、"保存到飞书"、"转飞书文档"、"上传表格到飞书"、"把 Excel 传到飞书"、"创建飞书表格"时自动触发。
 allowed-tools: Bash(lark-cli *), Read, Glob
 ---
 
@@ -12,7 +12,6 @@ allowed-tools: Bash(lark-cli *), Read, Glob
 ## 核心功能
 
 - 文档管理：创建文档、更新文档、获取文档
-- 文件夹管理：在个人文档库创建文件夹
 - 表格管理：读取 Excel/CSV 文件，创建 Base 多维表格或 Sheets 电子表格
 
 ## 文档操作
@@ -22,17 +21,6 @@ allowed-tools: Bash(lark-cli *), Read, Glob
 在个人文档库根目录创建：
 ```bash
 lark-cli docs +create --title "标题" --markdown "内容" --wiki-space my_library
-```
-
-在指定文件夹创建：
-```bash
-lark-cli docs +create --title "标题" --markdown "内容" --folder-token <folder_token>
-```
-
-### 创建文件夹
-
-```bash
-lark-cli api POST /open-apis/drive/v1/files/create_folder --data '{"name": "文件夹名", "folder_token": "<token>"}'
 ```
 
 ### 更新文档
@@ -109,44 +97,29 @@ lark-cli sheets +write \
 
 ## 工作流程
 
-### 场景 1: 创建文件夹
-
-1. 用户要求"在飞书创建文件夹 XXX"
-2. 询问父文件夹 token（默认可为空，在根目录创建）
-3. 执行创建命令
-4. 返回结果
-
-### 场景 2: 上传文档到根目录
+### 场景 1: 上传文档到根目录
 
 1. 用户要求上传文章
 2. 从用户提供的内容中提取标题和正文
 3. 执行: `lark-cli docs +create --title "标题" --markdown "内容" --wiki-space my_library`
 4. 返回文档 URL
 
-### 场景 3: 上传文档到指定文件夹
-
-1. 用户提供目标文件夹 token 或文件夹链接
-2. 从用户提供的内容中提取标题和正文
-3. 执行创建命令
-4. 返回文档 URL
-
-### 场景 4: 更新文档
+### 场景 2: 更新文档
 
 1. 用户提供文档 URL 要求更新
 2. 从用户提供提取新内容
 3. 执行: `lark-cli docs +update --doc <URL> --markdown "新内容" --mode overwrite`
 4. 返回更新结果
 
-### 场景 5: Excel/CSV 文件上传到飞书
+### 场景 3: Excel/CSV 文件上传到飞书
 
 1. 用户提供文件路径（如 `@Token计费测试用例.xlsx`）
 2. 使用 Python 读取 Excel/CSV 文件
 3. 提取表头和数据行
-4. 创建 Sheets 电子表格（默认创建在根目录）
+4. 创建 Sheets 电子表格
 5. 获取 sheet-id
 6. 写入数据
 7. 返回表格链接
-8. **注意**：如需放到指定文件夹，提示用户手动拖动
 
 **Python 读取 Excel 示例**:
 ```python
@@ -165,7 +138,6 @@ print(json.dumps(data, ensure_ascii=False))
 |------|------|
 | 检查认证 | `lark-cli doctor` |
 | 创建文档 | `lark-cli docs +create --title "标题" --markdown "内容" --wiki-space my_library` |
-| 创建文件夹 | `lark-cli api POST /open-apis/drive/v1/files/create_folder --data '{"name": "文件夹名", "folder_token": ""}'` |
 | 更新文档 | `lark-cli docs +update --doc <URL> --markdown "内容" --mode overwrite` |
 | 获取文档 | `lark-cli docs +fetch --doc <URL>` |
 | 创建 Sheets | `lark-cli sheets +create --title "标题"` |
@@ -180,7 +152,6 @@ print(json.dumps(data, ensure_ascii=False))
 - `--title`: 文档标题
 - `--markdown`: Markdown 格式的文档内容
 - `--wiki-space my_library`: 创建到个人文档库
-- `--folder-token <token>`: 创建到指定文件夹
 
 ### docs +update 参数
 - `--doc <URL或token>`: 文档 URL 或 token
@@ -206,26 +177,20 @@ print(json.dumps(data, ensure_ascii=False))
 
 ## 注意事项
 
-### Sheets 创建位置限制
+### Sheets 创建位置
 
-**重要**：`lark-cli sheets +create` 没有 `--folder-token` 参数，**只能在根目录创建**，无法直接创建到指定文件夹。
-
-解决方案：
-1. 先创建 Sheets
-2. 返回链接给用户，用户手动拖动到目标文件夹
-3. 或者使用 Base 多维表格（需要先有 base token）
+`lark-cli sheets +create` **只能在根目录创建**，返回链接后用户可手动拖动到目标位置。
 
 ### 认证要求
 
 部分操作需要特定 scope：
-- `drive:drive` - 文件夹操作
 - `docs:doc` - 文档操作
 - `base:base` - Base 表格操作
 - `sheets:spreadsheet` - Sheets 操作
 
 如果提示权限不足，重新授权：
 ```bash
-lark-cli auth login --scope "drive:drive,docs:doc,base:base,sheets:spreadsheet"
+lark-cli auth login --scope "docs:doc,base:base,sheets:spreadsheet"
 ```
 
 ## 参考文档
