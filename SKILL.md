@@ -1,7 +1,7 @@
 ---
 name: feishu-article-upload
-version: 1.4.0
-description: 飞书文档管理 skill。将文章、Excel 表格上传到飞书个人文档库，创建文档和表格。当用户提供文件路径或 URL 并说"上传到飞书"、"保存到飞书"、"转飞书文档"、"上传表格到飞书"、"把 Excel 传到飞书"、"创建飞书表格"时自动触发。
+version: 1.5.0
+description: 飞书文档管理 skill。将文章、Excel 表格同步到本地后上传到飞书个人文档库，创建文档和表格。当用户提供文件路径或 URL 并说"上传到飞书"、"保存到飞书"、"转飞书文档"、"上传表格到飞书"、"把 Excel 传到飞书"、"创建飞书表格"时自动触发。
 allowed-tools: Bash(lark-cli *), Read, Glob
 ---
 
@@ -12,7 +12,21 @@ allowed-tools: Bash(lark-cli *), Read, Glob
 ## 核心功能
 
 - 文档管理：创建文档、更新文档、获取文档
-- 表格管理：读取 Excel/CSV 文件，创建 Base 多维表格或 Sheets 电子表格
+- 表格管理：同步本地文件后，读取 Excel/CSV，创建飞书表格
+
+## 工作流程
+
+### 重要：先同步到本地
+
+上传文件前，**必须先将文件同步到本地**，确保文件存在且可读。
+
+**同步来源**：
+1. 用户直接提供文件路径（如 `@Token计费测试用例.xlsx`）
+2. 用户提供 URL（如网盘链接、GitHub 地址等）
+
+**同步方式**：
+- 本地文件：使用 `Read` 或 `Glob` 工具读取
+- URL 文件：使用 `Bash` + `curl` 下载
 
 ## 文档操作
 
@@ -37,100 +51,85 @@ lark-cli docs +fetch --doc <URL或token>
 
 ## 表格操作
 
-### Excel/CSV 文件转换为飞书表格
+### Excel/CSV 文件上传流程
 
-**推荐方式：使用 Sheets 电子表格**
+**步骤**：
 
-1. 读取 Excel/CSV 文件内容
-2. 创建 Sheets 电子表格
-3. 获取 sheet-id
-4. 写入数据
+1. **同步文件到本地**
+   - 本地文件：直接读取
+   - URL 文件：用 curl 下载
 
+2. **读取文件内容**
+   - 使用 Python pandas 读取 Excel/CSV
+
+3. **创建 Sheets 电子表格**
+
+4. **写入数据**
+
+### 具体命令
+
+**下载远程文件（如网盘、GitHub）**：
 ```bash
-# 读取 Excel 文件（使用 Python pandas）
-python3 -c "import pandas as pd; df = pd.read_excel('文件路径.xlsx'); print(df.to_json(orient='records'))"
+# 下载文件到本地
+curl -L -o 本地文件名.xlsx "文件URL"
 
-# 创建电子表格
+# 示例：下载 GitHub  releases 文件
+curl -L -o data.xlsx "https://github.com/user/repo/releases/download/v1.0/data.xlsx"
+```
+
+**读取 Excel/CSV 文件**：
+```bash
+python3 -c "
+import pandas as pd
+import json
+
+df = pd.read_excel('本地文件路径.xlsx')
+# 转为 2D 数组
+data = [df.columns.tolist()] + df.values.tolist()
+print(json.dumps(data, ensure_ascii=False))
+"
+```
+
+**创建表格并写入**：
+```bash
+# 1. 创建电子表格
 lark-cli sheets +create --title "表格标题"
 
-# 写入数据（2D 数组）
+# 2. 获取 sheet-id
+lark-cli sheets +info --spreadsheet-token <token>
+
+# 3. 写入数据
 lark-cli sheets +write \
   --spreadsheet-token <token> \
   --sheet-id <sheet_id> \
   --values '[["列1", "列2"], ["值1", "值2"]]'
 ```
 
-### 方式一：Base 多维表格
+## 工作流程详解
 
-创建表格：
-```bash
-lark-cli base +table-create --base-token <token> --name "表名"
-```
+### 场景 1: 上传本地文件
 
-插入/更新记录：
-```bash
-lark-cli base +record-upsert \
-  --base-token <token> \
-  --table-id <table_id> \
-  --json '{"fields": {"列1": "值1", "列2": "值2"}}'
-```
+1. 用户提供本地文件路径（如 `@Token计费测试用例.xlsx`）
+2. 使用 `Read` 确认文件存在
+3. 使用 Python 读取内容
+4. 创建 Sheets 并写入
+5. 返回链接
 
-### 方式二：Sheets 电子表格
+### 场景 2: 上传远程 URL 文件
 
-创建电子表格：
-```bash
-lark-cli sheets +create --title "表格标题"
-```
+1. 用户提供 URL（如网盘链接、GitHub 地址）
+2. 使用 curl 下载到本地临时目录
+3. 使用 Python 读取内容
+4. 创建 Sheets 并写入
+5. 清理临时文件
+6. 返回链接
 
-获取表格信息（含 sheet-id）：
-```bash
-lark-cli sheets +info --spreadsheet-token <token>
-```
-
-写入数据（2D 数组）：
-```bash
-lark-cli sheets +write \
-  --spreadsheet-token <token> \
-  --sheet-id <sheet_id> \
-  --values '[["标题1", "标题2"], ["值1", "值2"]]'
-```
-
-## 工作流程
-
-### 场景 1: 上传文档到根目录
-
-1. 用户要求上传文章
-2. 从用户提供的内容中提取标题和正文
-3. 执行: `lark-cli docs +create --title "标题" --markdown "内容" --wiki-space my_library`
-4. 返回文档 URL
-
-### 场景 2: 更新文档
+### 场景 3: 更新文档
 
 1. 用户提供文档 URL 要求更新
 2. 从用户提供提取新内容
 3. 执行: `lark-cli docs +update --doc <URL> --markdown "新内容" --mode overwrite`
 4. 返回更新结果
-
-### 场景 3: Excel/CSV 文件上传到飞书
-
-1. 用户提供文件路径（如 `@Token计费测试用例.xlsx`）
-2. 使用 Python 读取 Excel/CSV 文件
-3. 提取表头和数据行
-4. 创建 Sheets 电子表格
-5. 获取 sheet-id
-6. 写入数据
-7. 返回表格链接
-
-**Python 读取 Excel 示例**:
-```python
-import pandas as pd
-import json
-
-df = pd.read_excel('文件路径.xlsx')
-# 转为 2D 数组
-data = [df.columns.tolist()] + df.values.tolist()
-print(json.dumps(data, ensure_ascii=False))
-```
 
 ## 常用命令速查
 
@@ -143,8 +142,7 @@ print(json.dumps(data, ensure_ascii=False))
 | 创建 Sheets | `lark-cli sheets +create --title "标题"` |
 | 获取 sheet-id | `lark-cli sheets +info --spreadsheet-token <token>` |
 | 写入 Sheets 数据 | `lark-cli sheets +write --spreadsheet-token <token> --sheet-id <id> --values '[[...]]'` |
-| 创建 Base 表格 | `lark-cli base +table-create --base-token <token> --name "表名"` |
-| 插入 Base 记录 | `lark-cli base +record-upsert --base-token <token> --table-id <id> --json '{"fields": {...}}'` |
+| 下载文件 | `curl -L -o 本地文件名.xlsx "文件URL"` |
 
 ## 参数说明
 
@@ -166,31 +164,32 @@ print(json.dumps(data, ensure_ascii=False))
 - `--sheet-id <id>`: 工作表 ID（必需）
 - `--values <json>`: 2D 数组 JSON
 
-### base +table-create 参数
-- `--base-token <token>`: Base token（必需）
-- `--name <string>`: 表格名称（必需）
-
-### base +record-upsert 参数
-- `--base-token <token>`: Base token（必需）
-- `--table-id <id>`: 表格 ID 或名称（必需）
-- `--json <json>`: 记录 JSON，包含 fields 字段
-
 ## 注意事项
 
-### Sheets 创建位置
+### 1. 先同步到本地
+
+**重要**：上传前必须确保文件在本地存在。远程 URL 必须先下载。
+
+### 2. Sheets 创建位置
 
 `lark-cli sheets +create` **只能在根目录创建**，返回链接后用户可手动拖动到目标位置。
 
-### 认证要求
+### 3. 认证要求
 
 部分操作需要特定 scope：
 - `docs:doc` - 文档操作
-- `base:base` - Base 表格操作
 - `sheets:spreadsheet` - Sheets 操作
 
 如果提示权限不足，重新授权：
 ```bash
-lark-cli auth login --scope "docs:doc,base:base,sheets:spreadsheet"
+lark-cli auth login --scope "docs:doc,sheets:spreadsheet"
+```
+
+### 4. 临时文件处理
+
+下载的远程文件使用完毕后可删除：
+```bash
+rm 本地文件名.xlsx
 ```
 
 ## 参考文档
